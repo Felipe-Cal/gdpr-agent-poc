@@ -6,11 +6,10 @@ them), but backed by Qdrant instead of BigQuery.
 """
 
 from langchain_core.tools import tool
-from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
-from config import settings
+from config import get_embeddings, settings
 
 # Lazy singleton — initialised on first tool call
 _store: QdrantVectorStore | None = None
@@ -20,10 +19,7 @@ def _get_store() -> QdrantVectorStore:
     global _store
     if _store is None:
         client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-        embeddings = OpenAIEmbeddings(
-            model=settings.embedding_model,
-            api_key=settings.openai_api_key,
-        )
+        embeddings = get_embeddings()
         _store = QdrantVectorStore(
             client=client,
             collection_name=settings.qdrant_collection,

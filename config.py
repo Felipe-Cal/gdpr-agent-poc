@@ -15,9 +15,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None  # used if provider=anthropic
 
     # ── Embeddings ────────────────────────────────────────────────────────────
-    # Always uses OpenAI embeddings regardless of LLM provider.
-    # text-embedding-3-small: $0.02/1M tokens — full GDPR corpus costs ~$0.001
-    embedding_model: str = "text-embedding-3-small"
+    # embedding_provider: "openai" (requires OPENAI_API_KEY) or
+    #                     "huggingface" (free, runs locally — no API key needed)
+    embedding_provider: str = "huggingface"
+    # openai model: "text-embedding-3-small" (1536 dims)
+    # huggingface model: "all-MiniLM-L6-v2" (384 dims)
+    embedding_model: str = "all-MiniLM-L6-v2"
 
     # ── Qdrant ───────────────────────────────────────────────────────────────
     # Local:       qdrant_url=http://localhost:6333, no api_key needed
@@ -33,3 +36,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def get_embeddings():
+    """Return the configured embedding model. Import here to keep config dependency-light."""
+    if settings.embedding_provider == "openai":
+        from langchain_openai import OpenAIEmbeddings
+        return OpenAIEmbeddings(model=settings.embedding_model, api_key=settings.openai_api_key)
+    # default: huggingface (free, local)
+    from langchain_huggingface import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(model_name=settings.embedding_model)
