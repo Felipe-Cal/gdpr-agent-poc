@@ -15,7 +15,6 @@ from pathlib import Path
 
 import typer
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
@@ -23,7 +22,7 @@ from qdrant_client.models import Distance, VectorParams
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from config import settings
+from config import get_embeddings, settings
 
 console = Console()
 DOCS_DIR = Path("data/gdpr_docs")
@@ -61,23 +60,33 @@ def ingest():
     console.print(f"[dim]{len(docs)} chunks from {len(pdf_files)} file(s)[/dim]")
 
     # ── 2. Qdrant collection ─────────────────────────────────────────────────
-    embeddings = OpenAIEmbeddings(
-        model=settings.embedding_model,
-        api_key=settings.openai_api_key,
-    )
+    embeddings = get_embeddings()
+
+    # Probe vector size from the embedding model
+    vector_size = len(embeddings.embed_query("probe"))
 
     client = QdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key,
     )
 
-    # Create collection if it doesn't exist
-    existing = [c.name for c in client.get_collections().collections]
+    # Recreate collection if it doesn't exist or has wrong vector size
+    existing = {c.name: c for c in client.get_collections().collections}
+    if settings.qdrant_collection in existing:
+        info = client.get_collection(settings.qdrant_collection)
+        existing_size = info.config.params.vectors.size
+        if existing_size != vector_size:
+            console.print(
+                f"[yellow]Vector size mismatch ({existing_size} → {vector_size})."
+                " Recreating collection.[/yellow]"
+            )
+            client.delete_collection(settings.qdrant_collection)
+            existing.pop(settings.qdrant_collection)
+
     if settings.qdrant_collection not in existing:
         client.create_collection(
             collection_name=settings.qdrant_collection,
-            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
-            # 1536 = text-embedding-3-small output dimension
+            vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
         )
         console.print(f"[green]Created collection:[/green] {settings.qdrant_collection}")
     else:

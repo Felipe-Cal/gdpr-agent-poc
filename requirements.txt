@@ -11,5 +11,7 @@ pypdf>=4.0
 pydantic-settings>=2.0
 python-dotenv>=1.0
 ddgs>=9.0
+sentence-transformers>=3.0
+langchain-huggingface>=0.1
 rich>=13.0
 typer>=0.12
